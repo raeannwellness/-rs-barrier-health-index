@@ -200,7 +200,7 @@ Please begin your follow-up questions.`;
     const scoreMatch = pendingAssessmentText.match(/BARRIER HEALTH SCORE:\s*(.+)/);
     const score = scoreMatch ? scoreMatch[1].trim() : "Unknown";
     try {
-      await fetch(ZAPIER_WEBHOOK_URL, {
+     await fetch(MAILERLITE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
