@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 // ─── CONFIGURATION ────────────────────────────────────────────────────────────
-const ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/YOUR_WEBHOOK_ID/";
+const MAILERLITE_URL = "/api/subscribe";
 const CONTACT_EMAIL = "hello@ritualscript.com";
 
 // ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
