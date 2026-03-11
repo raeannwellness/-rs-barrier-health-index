@@ -8,16 +8,17 @@ export default async function handler(req, res) {
   const { email, barrier_score, primary_concern, duration, routine, full_report } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
-  const API_KEY = process.env.MAILERLITE_API_KEY;
+  const MAILERLITE_KEY = process.env.MAILERLITE_API_KEY;
+  const MAILERSEND_KEY = process.env.MAILERSEND_API_KEY;
   const GROUP_ID = '181683191179904610';
 
-  // ─── STEP 1: Add subscriber to group ────────────────────────────────────────
+  // ─── STEP 1: Add to MailerLite group ────────────────────────────────────────
   try {
     const subResponse = await fetch('https://connect.mailerlite.com/api/subscribers', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
+        'Authorization': `Bearer ${MAILERLITE_KEY}`,
       },
       body: JSON.stringify({
         email,
@@ -29,12 +30,12 @@ export default async function handler(req, res) {
       }),
     });
     const subData = await subResponse.json();
-    if (!subResponse.ok) return res.status(subResponse.status).json({ error: subData });
+    if (!subResponse.ok) console.error('MailerLite error:', subData);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('MailerLite error:', error.message);
   }
 
-  // ─── STEP 2: Send report email ───────────────────────────────────────────────
+  // ─── STEP 2: Send report via MailerSend ─────────────────────────────────────
   const formattedReport = (full_report || '')
     .split('\n')
     .filter(l => l.trim())
@@ -71,17 +72,17 @@ export default async function handler(req, res) {
 
       <p style="font-size:10px;color:#b0bfa8;text-align:center;line-height:1.6;">
         This assessment is educational in nature and does not constitute medical advice.<br>
-        Questions? Reply to this email or contact <a href="mailto:hello@ritualscript.com" style="color:#8a9e84;">hello@ritualscript.com</a>
+        Questions? <a href="mailto:hello@ritualscript.com" style="color:#8a9e84;">hello@ritualscript.com</a>
       </p>
     </div>
   `;
 
   try {
-    await fetch('https://connect.mailerlite.com/api/messages/email', {
+    const sendResponse = await fetch('https://api.mailersend.com/v1/email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
+        'Authorization': `Bearer ${MAILERSEND_KEY}`,
       },
       body: JSON.stringify({
         from: { email: 'hello@ritualscript.com', name: 'Rachel at Ritual Script' },
@@ -90,9 +91,12 @@ export default async function handler(req, res) {
         html: emailHtml,
       }),
     });
+    if (!sendResponse.ok) {
+      const err = await sendResponse.json();
+      console.error('MailerSend error:', JSON.stringify(err));
+    }
   } catch (error) {
-    // Don't fail the whole request if email sending fails
-    console.error('Email send error:', error.message);
+    console.error('MailerSend error:', error.message);
   }
 
   return res.status(200).json({ success: true });
