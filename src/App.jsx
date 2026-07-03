@@ -4,92 +4,262 @@ import { useState, useRef, useEffect } from "react";
 const MAILERLITE_URL = "/api/subscribe";
 const CONTACT_EMAIL = "hello@ritualscript.com";
 
-// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are the Ritual Script Barrier Health Index — an evidence-based skin barrier assessment tool created by Ritual Script Skincare, founded by Rachel, an Advanced Pharmacy Technician and Certified Skincare Coach.
+// ─── QUESTION FLOW ─────────────────────────────────────────────────────────────
+// Scoring scale is intentionally 0 / 1 / 3 / 4 — NOT a continuous 0–4 scale.
+// The gap between 1 and 3 is deliberate: it keeps vague "sometimes" answers
+// from softening the score, and gives real weight to meaningful strain signals.
+// Do not "fix" this by adding a value of 2 — it is not missing, it is by design.
 
-You have already received structured answers from the user about their primary concern, duration, and routine complexity. Now conduct a warm, intelligent 3-question conversational follow-up to gather the depth needed for a real barrier assessment.
-
-CONVERSATION PHASE (3 questions max, one at a time):
-Ask targeted, evidence-based questions about:
-- Specific symptoms: stinging from plain water or gentle products, post-cleanse tightness duration, sudden flushing, sensitivity to previously tolerated products
-- Active ingredients currently in use (retinoids, AHAs, BHAs, vitamin C, niacinamide, etc.)
-- Environmental or lifestyle factors: climate, stress, diet changes, new products introduced
-
-After exactly 3 conversational questions and answers, generate the full assessment using EXACTLY this format with no markdown symbols:
-
----ASSESSMENT_START---
-BARRIER HEALTH SCORE: [ONE OF: Optimal / Stressed / Compromised / Severely Impaired]
-
-RECOVERY TIMELINE: [e.g., "Estimated 14-21 days with proper barrier support" or "28-45 days based on typical epidermal turnover — individual results vary"]
-
-WHAT YOUR SKIN MAY BE TELLING YOU:
-[2-3 sentences explaining what may be happening at the barrier level in plain but informed language. Reference specific things they mentioned. Frame as observation, not diagnosis.]
-
-KEY PATTERNS IDENTIFIED:
-[3-4 specific patterns observed from their responses, each 1 sentence]
-
-WHAT TO CONSIDER PAUSING:
-[2-3 specific things to consider stopping or reducing, with brief rationale. Frame as suggestions not prescriptions.]
-
-BARRIER RECOVERY SUGGESTIONS:
-[3-4 ingredient or product type recommendations with brief evidence-based rationale for each]
-
-ROUTINE ADJUSTMENTS TO EXPLORE:
-[2-3 specific timing or application changes worth trying]
-
-YOUR RECOMMENDED NEXT STEP:
-[A warm, genuine recommendation. If Compromised or Severely Impaired, recommend the Ritual Reset program. If Stressed, recommend Scripted Insight for personalized guidance. If Optimal, suggest The Vault resources at ritualscript.com. Never pushy — frame as a helpful logical next step.]
-
-IMPORTANT REMINDER:
-This assessment is educational in nature and is based on the information you shared. It does not constitute medical advice. If you are experiencing persistent or severe skin concerns, please consult a licensed dermatologist.
----ASSESSMENT_END---
-
-TONE: Warm, informed, confident but never prescriptive. Like a knowledgeable friend with a pharmacy background who genuinely cares. Never robotic. Reference specific things they told you to make it feel truly personalized. Never use the words clinical, diagnose, triage, or prescribe.`;
-
-// ─── STRUCTURED QUESTIONS ─────────────────────────────────────────────────────
-const STRUCTURED_QUESTIONS = [
+const QUESTIONS = [
   {
-    id: "concern",
-    question: "What best describes your primary skin concern right now?",
-    subtitle: "Choose the one that feels most urgent",
+    id: "q1", domain: "reactivity", section: "Reactivity",
+    question: "How often do skincare products sting, burn, or feel uncomfortable when you apply them?",
     options: [
-      { label: "Redness & Reactivity", icon: "🔴", desc: "Flushing, stinging, sudden sensitivity" },
-      { label: "Breakouts & Congestion", icon: "⚪", desc: "Acne, clogged pores, bumpy texture" },
-      { label: "Dryness & Dehydration", icon: "💧", desc: "Tightness, flaking, dull appearance" },
-      { label: "Nothing Works Anymore", icon: "😔", desc: "Skin has become unpredictable and reactive" },
+      { label: "Never", value: 4 },
+      { label: "Occasionally, with specific products", value: 3 },
+      { label: "Fairly often, even with gentle products", value: 1 },
+      { label: "Almost every time, even with very simple products or water", value: 0 },
     ],
   },
   {
-    id: "duration",
-    question: "How long have you been experiencing this?",
-    subtitle: "Duration helps us understand where your barrier may be in its recovery stage",
+    id: "q2", domain: "reactivity", section: "Reactivity",
+    question: "Have products your skin used to tolerate started to feel irritating?",
     options: [
-      { label: "Just started", icon: "⚡", desc: "Within the last 2 weeks" },
-      { label: "A few weeks", icon: "📅", desc: "2–8 weeks" },
-      { label: "Several months", icon: "🗓️", desc: "2–6 months" },
-      { label: "Over a year", icon: "⏳", desc: "Chronic, ongoing issue" },
+      { label: "No — my skin responds about the same as usual", value: 4 },
+      { label: "A little — one or two products feel different lately", value: 2 },
+      { label: "Yes — several products that used to be fine now bother me", value: 1 },
+      { label: "Yes — almost everything feels irritating right now", value: 0 },
     ],
   },
   {
-    id: "routine",
-    question: "How would you describe your current skincare routine?",
-    subtitle: "Routine complexity is a key barrier health indicator",
+    id: "q3", domain: "dryness", section: "Dryness & Texture",
+    question: "How does your skin feel after cleansing?",
     options: [
-      { label: "Minimal", icon: "✨", desc: "Cleanser, moisturizer, SPF — that's it" },
-      { label: "Moderate", icon: "🌿", desc: "5–7 products, a few actives" },
-      { label: "Extensive", icon: "🧴", desc: "8+ steps, multiple actives" },
-      { label: "Currently Stripped Back", icon: "🔄", desc: "Simplified after a bad reaction" },
+      { label: "Comfortable, with no noticeable tightness", value: 4 },
+      { label: "Slightly tight for a few minutes", value: 3 },
+      { label: "Tight for 20 minutes or longer", value: 1 },
+      { label: "Tight and uncomfortable for a long time, even after moisturizing", value: 0 },
+    ],
+  },
+  {
+    id: "q4", domain: "dryness", section: "Dryness & Texture",
+    question: "Do you notice flaking or rough patches that do not settle with moisturizer?",
+    options: [
+      { label: "No noticeable flaking or rough patches", value: 4 },
+      { label: "Occasional flaking that settles with moisturizer", value: 3 },
+      { label: "Persistent flaking in a few areas", value: 1 },
+      { label: "Frequent flaking or roughness that does not settle easily", value: 0 },
+    ],
+  },
+  {
+    id: "q5", domain: "redness", section: "Triggers & Routine Habits",
+    question: "How often does your skin flush, redden, or feel reactive after heat, cold, wind, or sweat?",
+    options: [
+      { label: "Rarely or never", value: 4 },
+      { label: "Occasionally, usually with stronger triggers", value: 3 },
+      { label: "Fairly often, even with mild triggers", value: 1 },
+      { label: "Frequently — it feels unpredictable", value: 0 },
+    ],
+  },
+  {
+    id: "q6", domain: "cleanser", section: "Triggers & Routine Habits",
+    question: "Which description is closest to your current cleansing routine?",
+    options: [
+      { label: "Gentle cleanser, once or twice daily, with lukewarm water", value: 4 },
+      { label: "Standard cleanser, usually twice daily", value: 3 },
+      { label: "Foaming or exfoliating cleanser, hot water, or frequent cleansing", value: 1 },
+      { label: "Not sure — I use whatever is on hand, or I scrub regularly", value: 0 },
+    ],
+  },
+  {
+    id: "q7", domain: "moisturizer", section: "Triggers & Routine Habits",
+    question: "How often does moisturizer fit into your routine?",
+    options: [
+      { label: "Morning and night, most days", value: 4 },
+      { label: "Once daily or most days", value: 3 },
+      { label: "Only when my skin feels dry", value: 1 },
+      { label: "I skip it often because it feels unnecessary, too heavy, or hard to tolerate", value: 0 },
+    ],
+  },
+  {
+    id: "q8", domain: "actives", section: "Triggers & Routine Habits",
+    helper: "This isn't about whether actives are good or bad — it's about how much change your barrier is being asked to handle right now.",
+    question: "How many active products are you currently using in a typical week?",
+    subtitle: "Examples: retinoids, exfoliating acids, vitamin C, strong scrubs, or peel-style products.",
+    options: [
+      { label: "None, or only gentle basics", value: 4 },
+      { label: "1–2 active products, spaced apart", value: 3 },
+      { label: "3 or more active products, several times a week", value: 1 },
+      { label: "I recently added several new active products at once", value: 0 },
+    ],
+  },
+  {
+    id: "q9", domain: "spf", section: "Triggers & Routine Habits",
+    question: "How does sunscreen fit into your routine right now?",
+    options: [
+      { label: "I wear it daily, and it feels comfortable", value: 4 },
+      { label: "I wear it most days, and it usually feels comfortable", value: 3 },
+      { label: "I wear it inconsistently, or it sometimes stings", value: 1 },
+      { label: "I rarely wear it — it feels uncomfortable, breaks me out, or is hard to tolerate", value: 0 },
+    ],
+  },
+  {
+    id: "q10", domain: "lifestyle", section: "Triggers & Routine Habits",
+    question: "Have stress, sleep, travel, or seasonal changes seemed to affect your skin recently?",
+    options: [
+      { label: "Not that I have noticed", value: 4 },
+      { label: "Slightly, during specific stretches", value: 3 },
+      { label: "Yes, noticeably", value: 1 },
+      { label: "Yes, significantly — ongoing stress, poor sleep, travel, or major seasonal changes", value: 0 },
     ],
   },
 ];
 
-// ─── SCORE STYLES ─────────────────────────────────────────────────────────────
-const SCORE_STYLES = {
-  "Optimal": { bg: "#e8f5e9", color: "#2e7d32", icon: "✅" },
-  "Stressed": { bg: "#fff8e1", color: "#f57f17", icon: "⚠️" },
-  "Compromised": { bg: "#fce4ec", color: "#c62828", icon: "🔴" },
-  "Severely Impaired": { bg: "#f3e5f5", color: "#6a1b9a", icon: "🆘" },
+// Flow interleaves the two optional free-text moments between questions.
+const FLOW = [
+  { type: "question", ...QUESTIONS[0] },
+  { type: "question", ...QUESTIONS[1] },
+  { type: "freetext", id: "freetext_reactivity", prompt: "Anything else worth mentioning about how your skin reacts?" },
+  { type: "question", ...QUESTIONS[2] },
+  { type: "question", ...QUESTIONS[3] },
+  { type: "question", ...QUESTIONS[4] },
+  { type: "question", ...QUESTIONS[5] },
+  { type: "question", ...QUESTIONS[6] },
+  { type: "question", ...QUESTIONS[7] },
+  { type: "question", ...QUESTIONS[8] },
+  { type: "question", ...QUESTIONS[9] },
+  { type: "freetext", id: "freetext_final", prompt: "Is there anything else you'd like us to consider when writing your report?" },
+];
+
+// ─── DOMAINS & WEIGHTS ─────────────────────────────────────────────────────────
+const DOMAINS = {
+  reactivity: { label: "Product Reactivity", weight: 0.22, questionIds: ["q1", "q2"] },
+  dryness: { label: "Dryness & Flaking", weight: 0.20, questionIds: ["q3", "q4"] },
+  redness: { label: "Redness & Sensitivity", weight: 0.14, questionIds: ["q5"] },
+  cleanser: { label: "Cleansing Habits", weight: 0.12, questionIds: ["q6"] },
+  moisturizer: { label: "Moisturizer Consistency", weight: 0.12, questionIds: ["q7"] },
+  actives: { label: "Active Ingredient Load", weight: 0.10, questionIds: ["q8"] },
+  spf: { label: "SPF Habits", weight: 0.05, questionIds: ["q9"] },
+  lifestyle: { label: "Lifestyle & Triggers", weight: 0.05, questionIds: ["q10"] },
 };
+
+// ─── SCORE TIERS (ordered best → worst) ────────────────────────────────────────
+const TIERS = [
+  {
+    label: "Resilient Barrier", min: 85, max: 100,
+    what: "Your answers suggest your barrier is generally steady and responsive. The focus should be consistency, prevention, and thoughtful product changes rather than major routine shifts.",
+    bg: "#e8f0e9", color: "#3d5940", icon: "🌿",
+    retake: "in about 90 days, or at the start of a new season",
+  },
+  {
+    label: "Generally Supported", min: 70, max: 84,
+    what: "Your barrier appears mostly supported, with a few patterns worth watching. Small refinements may help reduce occasional dryness, tightness, or reactivity.",
+    bg: "#eef3ec", color: "#4a6e4e", icon: "🍃",
+    retake: "in about 60 to 90 days",
+  },
+  {
+    label: "Needs Barrier Support", min: 55, max: 69,
+    what: "Your answers suggest several signs that your barrier may need a simpler, more supportive routine. This is the ideal zone for education, routine review, and gentle habit changes.",
+    bg: "#faf3ea", color: "#8a6d3a", icon: "📋",
+    retake: "in about 4 to 6 weeks",
+  },
+  {
+    label: "Barrier Under Strain", min: 40, max: 54,
+    what: "Your barrier may be feeling stressed, especially if you're noticing frequent stinging, tightness, flaking, or product intolerance. The priority is reducing routine pressure and rebuilding consistency.",
+    bg: "#f7eced", color: "#A0505E", icon: "⚠️",
+    retake: "in about 3 to 4 weeks",
+  },
+  {
+    label: "High Support Needed", min: 0, max: 39,
+    what: "Your answers suggest a high level of barrier discomfort or reactivity. Keep recommendations conservative, and consider professional care if symptoms are persistent or severe.",
+    bg: "#f3e0e2", color: "#7d3f49", icon: "🩹",
+    retake: "in about 2 to 3 weeks",
+  },
+];
+
+// ─── SCORING ENGINE ─────────────────────────────────────────────────────────────
+function getTierIndexFromScore(score) {
+  return TIERS.findIndex(t => score >= t.min && score <= t.max);
+}
+
+function scoreAssessment(answers) {
+  const domainScores = {};
+  Object.entries(DOMAINS).forEach(([key, d]) => {
+    const sum = d.questionIds.reduce((acc, qid) => acc + (answers[qid] ?? 0), 0);
+    const maxPossible = d.questionIds.length * 4;
+    domainScores[key] = Math.round((sum / maxPossible) * 100);
+  });
+
+  const rawScore = Math.round(
+    Object.entries(DOMAINS).reduce((acc, [key, d]) => acc + domainScores[key] * d.weight, 0)
+  );
+
+  const rawTierIndex = getTierIndexFromScore(rawScore);
+
+  // ── Severity caps ──
+  // Rule 1 — Active Reactivity + Dryness: cannot score better than "Barrier Under Strain" (index 3)
+  const rule1 = (answers.q1 === 0 || answers.q2 === 0) && (answers.q3 <= 1 || answers.q4 <= 1);
+  // Rule 2 — Severe Reactivity Alone: cannot score better than "Needs Barrier Support" (index 2)
+  const rule2 = answers.q1 === 0 && answers.q2 <= 1;
+
+  let requiredMinIndex = -1;
+  if (rule1) requiredMinIndex = Math.max(requiredMinIndex, 3);
+  if (rule2) requiredMinIndex = Math.max(requiredMinIndex, 2);
+
+  const finalTierIndex = Math.max(rawTierIndex, requiredMinIndex);
+  const capped = finalTierIndex > rawTierIndex;
+
+  // Top contributing factors — lowest-scoring domains first
+  const sortedDomains = Object.entries(domainScores)
+    .sort((a, b) => a[1] - b[1])
+    .map(([key]) => DOMAINS[key].label);
+
+  return {
+    score: rawScore,
+    tier: TIERS[finalTierIndex],
+    capped,
+    domainScores,
+    topFactors: sortedDomains.slice(0, 3),
+    topFactor: sortedDomains[0],
+  };
+}
+
+// ─── AI REPORT SYSTEM PROMPT ────────────────────────────────────────────────────
+const buildReportSystemPrompt = () => `You are writing the personalized narrative report for the Ritual Script Barrier Health Index. You are NOT deciding the score or category — those are fixed facts given to you and must be used exactly as provided, never recalculated or contradicted.
+
+You will receive: the user's Barrier Health Score, their category, their top three contributing factors, and optionally some free-text context they provided about their skin.
+
+Write ONLY the sections below, in this exact order, using EXACTLY this format with no markdown symbols:
+
+---REPORT_START---
+WHAT THIS SCORE SUGGESTS:
+[2-3 sentences building on the category description already shown to the user. Do not repeat the category description verbatim — add depth.]
+
+WHAT SEEMS TO BE CONTRIBUTING MOST:
+[Discuss the three given top factors in plain language, 1-2 sentences each. If free-text context was provided, let it quietly inform this section without quoting it directly or writing phrases like "you mentioned" or "as you said."]
+
+YOUR FIRST THREE NEXT STEPS:
+[3 specific, practical actions for this week, grounded in the top factors]
+
+WHAT TO PAUSE OR SIMPLIFY FOR NOW:
+[2-3 common barrier stressors worth pausing — new actives, over-exfoliating, adding multiple products at once — tailored to what's relevant here]
+
+WHEN TO SEEK PROFESSIONAL CARE:
+[Brief, calm guidance: persistent, severe, painful, rapidly worsening, or unexplained symptoms warrant a dermatologist or licensed provider]
+
+RELATED RITUAL SCRIPT RESOURCES:
+[1-2 sentences pointing toward The Vault for relevant free education based on the top factors]
+
+YOUR NEXT STEP:
+[Warm, non-pushy invitation. If category is "Barrier Under Strain" or "High Support Needed," mention Scripted Insight or The Ritual Reset. If "Needs Barrier Support," mention Scripted Insight. If "Generally Supported" or "Resilient Barrier," point to The Vault and Skin Lab as ways to keep learning.]
+---REPORT_END---
+
+RULES:
+- This is educational, not medical. Never diagnose. Use "may suggest," "your answers indicate," "patterns to consider."
+- Never promise a product, routine, or guidance service will raise the score. Use "may help you understand," "can support more informed decisions."
+- Warm, plain-language, calm — even for lower scores. Never alarming, never clinical, never robotic.
+- Never use the words clinical, diagnose, triage, prescribe, or severely compromised.
+- Do not quote the user's free text back to them directly anywhere in this report — it has already been shown to them separately.`;
 
 const TypingIndicator = () => (
   <div style={{ display: "flex", gap: "5px", padding: "14px 18px", alignItems: "center" }}>
@@ -102,130 +272,128 @@ const TypingIndicator = () => (
   </div>
 );
 
-const parseAssessment = (text) => {
-  const start = text.indexOf("---ASSESSMENT_START---");
-  const end = text.indexOf("---ASSESSMENT_END---");
-  if (start === -1) return null;
-  const content = text.slice(start + 22, end === -1 ? undefined : end).trim();
-  const scoreMatch = content.match(/BARRIER HEALTH SCORE:\s*(.+)/);
-  return { content, score: scoreMatch ? scoreMatch[1].trim() : null };
+const parseReport = (text) => {
+  const start = text.indexOf("---REPORT_START---");
+  const end = text.indexOf("---REPORT_END---");
+  if (start === -1) return text;
+  return text.slice(start + 19, end === -1 ? undefined : end).trim();
 };
 
 export default function BarrierHealthIndex() {
-  const [phase, setPhase] = useState("intro");
-  const [structuredStep, setStructuredStep] = useState(0);
-  const [structuredAnswers, setStructuredAnswers] = useState({});
-  const [messages, setMessages] = useState([]);
-  const [conversationHistory, setConversationHistory] = useState([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState("intro"); // intro | quiz | teaser | email | generating | report
+  const [flowIndex, setFlowIndex] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [freeText, setFreeText] = useState({ freetext_reactivity: "", freetext_final: "" });
+  const [textInput, setTextInput] = useState("");
+  const [result, setResult] = useState(null);
+  const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [submittingEmail, setSubmittingEmail] = useState(false);
-  const [assessment, setAssessment] = useState(null);
-  const [pendingAssessmentText, setPendingAssessmentText] = useState("");
-  const [userEmail, setUserEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [reportText, setReportText] = useState("");
   const bottomRef = useRef(null);
-  const inputRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, phase]);
+  }, [phase]);
 
-  const callClaude = async (history) => {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system: SYSTEM_PROMPT,
-        messages: history,
-      }),
-    });
-    const data = await response.json();
-    return data.content?.[0]?.text || "I'm having trouble connecting. Please try again.";
-  };
+  const currentStep = FLOW[flowIndex];
+  const progressPct = Math.round(((flowIndex + 1) / FLOW.length) * 100);
 
-  const startChat = async () => {
-    setPhase("chat");
-    setLoading(true);
-    const summary = `Here are my initial answers:
-- Primary concern: ${structuredAnswers.concern}
-- Duration: ${structuredAnswers.duration}
-- Routine complexity: ${structuredAnswers.routine}
-
-Please begin your follow-up questions.`;
-    const initialHistory = [{ role: "user", content: summary }];
-    const reply = await callClaude(initialHistory);
-    setConversationHistory([...initialHistory, { role: "assistant", content: reply }]);
-    setMessages([{ role: "assistant", content: reply }]);
-    setLoading(false);
-    setTimeout(() => inputRef.current?.focus(), 100);
-  };
-
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const userMessage = input.trim();
-    setInput("");
-    const newMessages = [...messages, { role: "user", content: userMessage }];
-    setMessages(newMessages);
-    setLoading(true);
-    const newHistory = [...conversationHistory, { role: "user", content: userMessage }];
-    const reply = await callClaude(newHistory);
-    const parsed = parseAssessment(reply);
-    if (parsed) {
-      const preText = reply.slice(0, reply.indexOf("---ASSESSMENT_START---")).trim();
-      setMessages([...newMessages, ...(preText ? [{ role: "assistant", content: preText }] : [])]);
-      setPendingAssessmentText(parsed.content);
-      setLoading(false);
-      setPhase("email");
+  const goNext = () => {
+    if (flowIndex < FLOW.length - 1) {
+      setTextInput("");
+      setFlowIndex(i => i + 1);
     } else {
-      setConversationHistory([...newHistory, { role: "assistant", content: reply }]);
-      setMessages([...newMessages, { role: "assistant", content: reply }]);
-      setLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const scored = scoreAssessment(answers);
+      setResult(scored);
+      setPhase("teaser");
     }
   };
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const goBack = () => {
+    if (flowIndex > 0) setFlowIndex(i => i - 1);
   };
 
-  const submitEmail = async () => {
+  const selectAnswer = (qid, value) => {
+    setAnswers(prev => ({ ...prev, [qid]: value }));
+  };
+
+  const submitFreeText = (skip = false) => {
+    setFreeText(prev => ({ ...prev, [currentStep.id]: skip ? "" : textInput.trim() }));
+    goNext();
+  };
+
+  const generateReport = async () => {
+    setSubmitting(true);
+    setPhase("generating");
+    try {
+      const userPayload = `Barrier Health Score: ${result.score}
+Category: ${result.tier.label}
+Category description already shown to user: ${result.tier.what}
+Top contributing factors: ${result.topFactors.join(", ")}
+${freeText.freetext_reactivity ? `Free-text context (reactivity section): ${freeText.freetext_reactivity}` : ""}
+${freeText.freetext_final ? `Free-text context (final): ${freeText.freetext_final}` : ""}
+First name: ${firstName || "there"}
+
+Write the report now.`;
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system: buildReportSystemPrompt(),
+          messages: [{ role: "user", content: userPayload }],
+        }),
+      });
+      const data = await response.json();
+      const raw = data.content?.[0]?.text || "";
+      const parsed = parseReport(raw);
+      setReportText(parsed || "We ran into trouble generating your full narrative report, but your Barrier Health Score above is accurate. Please reach out and we'll follow up personally.");
+
+      // Sign up for The Script + deliver full report data
+      try {
+        await fetch(MAILERLITE_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email, first_name: firstName,
+            barrier_score: result.score,
+            barrier_category: result.tier.label,
+            top_factors: result.topFactors.join(", "),
+            free_text_reactivity: freeText.freetext_reactivity,
+            free_text_final: freeText.freetext_final,
+            full_report: parsed,
+            source: "Barrier Health Index",
+            timestamp: new Date().toISOString(),
+          }),
+        });
+      } catch (e) { /* silently fail — report still displays on screen */ }
+
+      setPhase("report");
+    } catch (e) {
+      setReportText("We ran into trouble generating your full narrative report, but your Barrier Health Score above is accurate. Please reach out and we'll follow up personally.");
+      setPhase("report");
+    }
+    setSubmitting(false);
+  };
+
+  const submitEmail = () => {
     if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
       setEmailError("Please enter a valid email address.");
       return;
     }
+    if (!firstName.trim()) {
+      setEmailError("Please enter your first name.");
+      return;
+    }
     setEmailError("");
-    setSubmittingEmail(true);
-    const scoreMatch = pendingAssessmentText.match(/BARRIER HEALTH SCORE:\s*(.+)/);
-    const score = scoreMatch ? scoreMatch[1].trim() : "Unknown";
-    try {
-     await fetch(MAILERLITE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email, barrier_score: score,
-          primary_concern: structuredAnswers.concern,
-          duration: structuredAnswers.duration,
-          routine: structuredAnswers.routine,
-          full_report: pendingAssessmentText,
-          source: "Barrier Health Index",
-          timestamp: new Date().toISOString(),
-        }),
-      });
-    } catch (e) { /* silently fail */ }
-    setUserEmail(email);
-    setAssessment({ content: pendingAssessmentText, score });
-    setSubmittingEmail(false);
-    setPhase("report");
+    generateReport();
   };
 
   const formatReport = (content) => {
     return content.split("\n").filter(l => l.trim()).map((line, i) => {
-      if (line.match(/^BARRIER HEALTH SCORE:/)) return null;
-      const isHeader = line.match(/^[A-Z][A-Z\s&:—\-]+$/) ||
-        (line.endsWith(":") && line === line.toUpperCase() && line.length < 60) ||
-        (line.match(/^[A-Z][A-Z\s&\-]+:/) && !line.match(/^[A-Z][a-z]/) && line.length < 70);
+      const isHeader = line.match(/^[A-Z][A-Z\s&:,\-]+:$/) && line.length < 60;
       if (isHeader) {
         return (
           <div key={i} style={{
@@ -244,10 +412,6 @@ Please begin your follow-up questions.`;
     });
   };
 
-  const progressWidth = phase === "structured"
-    ? `${(structuredStep / (STRUCTURED_QUESTIONS.length + 3)) * 100}%`
-    : phase === "chat" ? "65%" : phase === "email" ? "88%" : "100%";
-
   return (
     <div style={{
       minHeight: "100vh",
@@ -262,13 +426,12 @@ Please begin your follow-up questions.`;
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
         .fade-up{animation:fadeUp .45s ease forwards}
         .fade-in{animation:fadeIn .4s ease forwards}
-        .msg-in{animation:fadeUp .35s ease forwards}
         .opt:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(74,110,78,.15)!important;border-color:#7a9e7e!important}
         .opt.sel{border-color:#4a6e4e!important;background:linear-gradient(135deg,#e8f0e9,#d4e4d5)!important}
         .pbtn:hover:not(:disabled){background:#3d5940!important;transform:translateY(-1px)}
         .pbtn:disabled{opacity:.45;cursor:default;transform:none!important}
-        .sbtn:hover:not(:disabled){background:#3d5940!important}
-        textarea:focus,input[type=email]:focus{outline:none!important;border-color:#7a9e7e!important;box-shadow:0 0 0 3px rgba(122,158,126,.15)!important}
+        .skipbtn:hover{color:#3d5940!important}
+        textarea:focus,input[type=email]:focus,input[type=text]:focus{outline:none!important;border-color:#7a9e7e!important;box-shadow:0 0 0 3px rgba(122,158,126,.15)!important}
         textarea{resize:none}
         ::-webkit-scrollbar{width:4px}
         ::-webkit-scrollbar-thumb{background:#c5d5c6;border-radius:4px}
@@ -305,7 +468,7 @@ Please begin your follow-up questions.`;
             </h1>
             <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12px",
               color:"rgba(208,228,198,.75)",margin:0,fontWeight:"300",letterSpacing:".3px"}}>
-              Advanced Pharmacy Technician &amp; Certified Skincare Coach
+              Certified Skincare Coach &amp; Licensed Advanced Pharmacy Technician
             </p>
           </div>
           <a href={`mailto:${CONTACT_EMAIL}`} className="clink"
@@ -323,10 +486,10 @@ Please begin your follow-up questions.`;
         </div>
 
         {/* PROGRESS */}
-        {["structured","chat","email","report"].includes(phase) && (
+        {["quiz","teaser","email","generating","report"].includes(phase) && (
           <div style={{height:"3px",background:"#e4ede4"}}>
             <div style={{height:"100%",background:"linear-gradient(90deg,#4a6e4e,#7a9e7e)",
-              width:progressWidth,transition:"width .5s ease"}}/>
+              width: phase==="quiz" ? `${progressPct}%` : "100%", transition:"width .4s ease"}}/>
           </div>
         )}
 
@@ -342,25 +505,25 @@ Please begin your follow-up questions.`;
                 justifyContent:"center",fontSize:"30px"}}>🌿</div>
               <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:"24px",
                 fontWeight:"400",fontStyle:"italic",color:"#3d5940",margin:"0 0 14px"}}>
-                Your skin has a story to tell.
+                Know your Barrier Health Score.
               </h2>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13.5px",color:"#6a7a65",
                 lineHeight:"1.8",margin:"0 0 10px",fontWeight:"300",
                 maxWidth:"460px",marginLeft:"auto",marginRight:"auto"}}>
-                This assessment uses evidence-based reasoning — not a generic quiz — to help you understand what your skin barrier is telling you and what it genuinely needs.
+                A short, education-first assessment to help you understand how supported your skin barrier feels right now.
               </p>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",color:"#8a9a85",
                 lineHeight:"1.7",margin:"0 0 30px",fontWeight:"300"}}>
-                Takes about 5 minutes. You'll receive a personalized Barrier Health Score and a full evidence-based report — delivered to your inbox.
+                This tool is educational and not diagnostic. Your score is based on your answers about comfort, reactivity, routine habits, and recent skin patterns.
               </p>
               <button className="pbtn"
-                onClick={()=>setPhase("structured")}
+                onClick={()=>setPhase("quiz")}
                 style={{background:"#4a6e4e",color:"#f5f0e8",border:"none",
                   padding:"16px 44px",borderRadius:"50px",
                   fontFamily:"'Jost',sans-serif",fontSize:"11px",
                   letterSpacing:"2.5px",textTransform:"uppercase",
                   cursor:"pointer",transition:"all .25s ease",fontWeight:"500"}}>
-                Begin Assessment
+                Start the Assessment
               </button>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",color:"#b0bfa8",
                 marginTop:"16px",letterSpacing:".3px"}}>
@@ -373,150 +536,164 @@ Please begin your follow-up questions.`;
             </div>
           )}
 
-          {/* STRUCTURED */}
-          {phase==="structured"&&(
-            <div className="fade-up" key={structuredStep}>
+          {/* QUIZ — QUESTION STEP */}
+          {phase==="quiz" && currentStep.type==="question" && (
+            <div className="fade-up" key={currentStep.id}>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",letterSpacing:"2.5px",
                 textTransform:"uppercase",color:"#7a9e7e",margin:"0 0 10px"}}>
-                Question {structuredStep+1} of {STRUCTURED_QUESTIONS.length}
+                {currentStep.section} · Question {flowIndex+1} of {FLOW.length}
               </p>
-              <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:"22px",
+              <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:"21px",
                 fontWeight:"400",color:"#3d5940",margin:"0 0 6px",lineHeight:1.3}}>
-                {STRUCTURED_QUESTIONS[structuredStep].question}
+                {currentStep.question}
               </h2>
-              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12px",color:"#8a9a85",
-                margin:"0 0 22px",fontWeight:"300"}}>
-                {STRUCTURED_QUESTIONS[structuredStep].subtitle}
-              </p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px",marginBottom:"28px"}}>
-                {STRUCTURED_QUESTIONS[structuredStep].options.map(opt=>{
-                  const qId=STRUCTURED_QUESTIONS[structuredStep].id;
-                  const sel=structuredAnswers[qId]===opt.label;
+              {currentStep.subtitle && (
+                <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12px",color:"#8a9a85",
+                  margin:"0 0 4px",fontWeight:"300"}}>{currentStep.subtitle}</p>
+              )}
+              {currentStep.helper && (
+                <p style={{fontFamily:"'Jost',sans-serif",fontSize:"11.5px",color:"#a0ac9a",
+                  margin:"0 0 18px",fontWeight:"300",fontStyle:"italic"}}>{currentStep.helper}</p>
+              )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr",gap:"10px",margin:"22px 0 28px"}}>
+                {currentStep.options.map(opt=>{
+                  const sel = answers[currentStep.id]===opt.value;
                   return(
                     <div key={opt.label}
                       className={`opt${sel?" sel":""}`}
-                      onClick={()=>setStructuredAnswers(p=>({...p,[qId]:opt.label}))}
-                      style={{padding:"16px",borderRadius:"14px",
+                      onClick={()=>selectAnswer(currentStep.id, opt.value)}
+                      style={{padding:"15px 18px",borderRadius:"12px",
                         border:`1.5px solid ${sel?"#4a6e4e":"rgba(145,175,145,.25)"}`,
                         background:sel?"linear-gradient(135deg,#e8f0e9,#d4e4d5)":"white",
                         cursor:"pointer",transition:"all .2s ease",
-                        boxShadow:"0 2px 10px rgba(0,0,0,.04)"}}>
-                      <div style={{fontSize:"22px",marginBottom:"6px"}}>{opt.icon}</div>
-                      <div style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",
-                        fontWeight:"500",color:"#3d4a3a",marginBottom:"4px"}}>{opt.label}</div>
-                      <div style={{fontFamily:"'Jost',sans-serif",fontSize:"11px",
-                        color:"#8a9a85",fontWeight:"300",lineHeight:1.4}}>{opt.desc}</div>
+                        boxShadow:"0 2px 10px rgba(0,0,0,.04)",
+                        fontFamily:"'Jost',sans-serif",fontSize:"13.5px",
+                        fontWeight:"400",color:"#3d4a3a",lineHeight:1.4}}>
+                      {opt.label}
                     </div>
                   );
                 })}
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                {structuredStep>0
-                  ?<button onClick={()=>setStructuredStep(s=>s-1)}
+                {flowIndex>0
+                  ?<button onClick={goBack}
                       style={{background:"none",border:"none",fontFamily:"'Jost',sans-serif",
                         fontSize:"12px",color:"#8a9a85",cursor:"pointer",padding:0}}>← Back</button>
                   :<div/>}
                 <button className="pbtn"
-                  disabled={!structuredAnswers[STRUCTURED_QUESTIONS[structuredStep].id]}
-                  onClick={()=>{
-                    if(structuredStep<STRUCTURED_QUESTIONS.length-1){
-                      setStructuredStep(s=>s+1);
-                    }else{
-                      startChat();
-                    }
-                  }}
+                  disabled={answers[currentStep.id]===undefined}
+                  onClick={goNext}
                   style={{background:"#4a6e4e",color:"#f5f0e8",border:"none",
                     padding:"13px 32px",borderRadius:"50px",
                     fontFamily:"'Jost',sans-serif",fontSize:"11px",
                     letterSpacing:"2px",textTransform:"uppercase",
                     cursor:"pointer",transition:"all .25s ease",fontWeight:"500"}}>
-                  {structuredStep<STRUCTURED_QUESTIONS.length-1?"Continue →":"Begin Deep Assessment →"}
+                  Continue →
                 </button>
               </div>
             </div>
           )}
 
-          {/* CHAT */}
-          {phase==="chat"&&(
-            <div>
-              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",letterSpacing:"2px",
-                textTransform:"uppercase",color:"#7a9e7e",margin:"0 0 14px"}}>
-                Personalized Follow-Up
+          {/* QUIZ — FREE TEXT STEP */}
+          {phase==="quiz" && currentStep.type==="freetext" && (
+            <div className="fade-up" key={currentStep.id}>
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",letterSpacing:"2.5px",
+                textTransform:"uppercase",color:"#7a9e7e",margin:"0 0 10px"}}>
+                Optional
               </p>
-              <div style={{height:"340px",overflowY:"auto",display:"flex",
-                flexDirection:"column",gap:"14px",paddingRight:"4px",marginBottom:"16px"}}>
-                {messages.map((msg,i)=>(
-                  <div key={i} className="msg-in"
-                    style={{display:"flex",
-                      justifyContent:msg.role==="user"?"flex-end":"flex-start",
-                      animationDelay:`${Math.min(i*.04,.15)}s`}}>
-                    {msg.role==="assistant"&&(
-                      <div style={{width:"30px",height:"30px",
-                        background:"linear-gradient(135deg,#6a8f6e,#4a6e4e)",
-                        borderRadius:"50%",display:"flex",alignItems:"center",
-                        justifyContent:"center",fontSize:"13px",
-                        marginRight:"10px",flexShrink:0,marginTop:"2px"}}>🌿</div>
-                    )}
-                    <div style={{maxWidth:"78%",padding:"12px 16px",
-                      borderRadius:msg.role==="user"?"18px 18px 4px 18px":"18px 18px 18px 4px",
-                      background:msg.role==="user"
-                        ?"linear-gradient(135deg,#4a6e4e,#3d5940)":"white",
-                      color:msg.role==="user"?"#f5f0e8":"#3d4a3a",
-                      fontFamily:"'Jost',sans-serif",fontSize:"13.5px",
-                      lineHeight:"1.7",fontWeight:"300",
-                      boxShadow:msg.role==="user"
-                        ?"0 2px 12px rgba(60,80,55,.2)":"0 2px 12px rgba(0,0,0,.05)",
-                      border:msg.role==="assistant"?"1px solid rgba(165,190,165,.2)":"none",
-                      whiteSpace:"pre-wrap"}}>
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-                {loading&&(
-                  <div className="msg-in" style={{display:"flex",alignItems:"flex-start"}}>
-                    <div style={{width:"30px",height:"30px",
-                      background:"linear-gradient(135deg,#6a8f6e,#4a6e4e)",
-                      borderRadius:"50%",display:"flex",alignItems:"center",
-                      justifyContent:"center",fontSize:"13px",
-                      marginRight:"10px",flexShrink:0}}>🌿</div>
-                    <div style={{background:"white",borderRadius:"18px 18px 18px 4px",
-                      border:"1px solid rgba(165,190,165,.2)",
-                      boxShadow:"0 2px 12px rgba(0,0,0,.05)"}}>
-                      <TypingIndicator/>
-                    </div>
-                  </div>
+              <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:"21px",
+                fontWeight:"400",color:"#3d5940",margin:"0 0 10px",lineHeight:1.3}}>
+                {currentStep.prompt}
+              </h2>
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"11.5px",color:"#a0ac9a",
+                margin:"0 0 18px",fontWeight:"300",fontStyle:"italic"}}>
+                Your response may appear as-is in your personalized report.
+              </p>
+              <textarea
+                value={textInput}
+                onChange={e=>setTextInput(e.target.value)}
+                placeholder="Share anything you'd like — totally optional"
+                rows={4}
+                style={{width:"100%",padding:"14px 16px",borderRadius:"14px",
+                  border:"1.5px solid rgba(145,175,145,.3)",background:"white",
+                  fontFamily:"'Jost',sans-serif",fontSize:"13.5px",
+                  color:"#3d4a3a",fontWeight:"300",lineHeight:"1.6",
+                  transition:"all .2s ease",boxShadow:"0 1px 6px rgba(0,0,0,.04)",
+                  boxSizing:"border-box",marginBottom:"22px"}}/>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                {flowIndex>0
+                  ?<button onClick={goBack}
+                      style={{background:"none",border:"none",fontFamily:"'Jost',sans-serif",
+                        fontSize:"12px",color:"#8a9a85",cursor:"pointer",padding:0}}>← Back</button>
+                  :<div/>}
+                <div style={{display:"flex",gap:"14px",alignItems:"center"}}>
+                  <button className="skipbtn" onClick={()=>submitFreeText(true)}
+                    style={{background:"none",border:"none",fontFamily:"'Jost',sans-serif",
+                      fontSize:"11.5px",color:"#a0ac9a",cursor:"pointer",padding:0,
+                      letterSpacing:"1px",transition:"color .2s ease"}}>Skip</button>
+                  <button className="pbtn" onClick={()=>submitFreeText(false)}
+                    style={{background:"#4a6e4e",color:"#f5f0e8",border:"none",
+                      padding:"13px 32px",borderRadius:"50px",
+                      fontFamily:"'Jost',sans-serif",fontSize:"11px",
+                      letterSpacing:"2px",textTransform:"uppercase",
+                      cursor:"pointer",transition:"all .25s ease",fontWeight:"500"}}>
+                    Continue →
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TEASER RESULT */}
+          {phase==="teaser" && result && (
+            <div className="fade-up" style={{textAlign:"center"}}>
+              <div style={{background:result.tier.bg,border:`1.5px solid ${result.tier.color}28`,
+                borderRadius:"18px",padding:"28px 24px",marginBottom:"24px"}}>
+                <div style={{fontSize:"30px",marginBottom:"10px"}}>{result.tier.icon}</div>
+                <div style={{fontFamily:"'Jost',sans-serif",fontSize:"9px",
+                  letterSpacing:"2.5px",textTransform:"uppercase",
+                  color:result.tier.color,opacity:.75,marginBottom:"6px"}}>
+                  Your Barrier Health Score
+                </div>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",
+                  fontSize:"44px",fontWeight:"500",color:result.tier.color,lineHeight:1,marginBottom:"8px"}}>
+                  {result.score}
+                </div>
+                <div style={{fontFamily:"'Jost',sans-serif",fontSize:"15px",
+                  fontWeight:"600",color:result.tier.color,marginBottom:"14px"}}>
+                  {result.tier.label}
+                </div>
+                <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",
+                  color:"#3d4a3a",lineHeight:"1.7",fontWeight:"300",margin:0}}>
+                  {result.tier.what}
+                </p>
+                {result.capped && (
+                  <p style={{fontFamily:"'Jost',sans-serif",fontSize:"11px",fontStyle:"italic",
+                    color:result.tier.color,opacity:.85,marginTop:"12px",lineHeight:"1.6"}}>
+                    Your numerical score reflects the full set of answers, but your category was adjusted because your responses suggest significant current reactivity.
+                  </p>
                 )}
-                <div ref={bottomRef}/>
               </div>
-              <div style={{display:"flex",gap:"10px",alignItems:"flex-end"}}>
-                <textarea ref={inputRef} value={input}
-                  onChange={e=>setInput(e.target.value)}
-                  onKeyDown={handleKey}
-                  placeholder="Share what your skin has been doing..."
-                  rows={2}
-                  style={{flex:1,padding:"12px 16px",borderRadius:"14px",
-                    border:"1.5px solid rgba(145,175,145,.3)",background:"white",
-                    fontFamily:"'Jost',sans-serif",fontSize:"13.5px",
-                    color:"#3d4a3a",fontWeight:"300",lineHeight:"1.5",
-                    transition:"all .2s ease",boxShadow:"0 1px 6px rgba(0,0,0,.04)"}}/>
-                <button className="sbtn" onClick={sendMessage}
-                  disabled={loading||!input.trim()}
-                  style={{background:loading||!input.trim()?"#b5c9b7":"#4a6e4e",
-                    color:"white",border:"none",width:"46px",height:"46px",
-                    borderRadius:"12px",
-                    cursor:loading||!input.trim()?"default":"pointer",
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    transition:"all .2s ease",flexShrink:0}}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"
-                      stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              </div>
-              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",
-                color:"#b0bfa8",margin:"8px 0 0",letterSpacing:".3px"}}>
-                Press Enter to send
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12.5px",color:"#6a7a65",
+                lineHeight:"1.7",fontWeight:"300",margin:"0 0 6px"}}>
+                Biggest contributor: <strong style={{color:"#3d5940",fontWeight:"600"}}>{result.topFactor}</strong>
               </p>
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12px",color:"#8a9a85",
+                margin:"0 0 20px",fontWeight:"300"}}>
+                Suggested retake: <strong style={{color:"#6a7a65",fontWeight:"500"}}>{result.tier.retake}</strong>
+              </p>
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"12px",color:"#a0ac9a",
+                margin:"0 0 28px",fontWeight:"300"}}>
+                Enter your details to receive your full Barrier Health Report — including your top contributing factors, first steps, and what to pause for now.
+              </p>
+              <button className="pbtn" onClick={()=>setPhase("email")}
+                style={{background:"#4a6e4e",color:"#f5f0e8",border:"none",
+                  padding:"16px 44px",borderRadius:"50px",
+                  fontFamily:"'Jost',sans-serif",fontSize:"11px",
+                  letterSpacing:"2.5px",textTransform:"uppercase",
+                  cursor:"pointer",transition:"all .25s ease",fontWeight:"500"}}>
+                Get My Full Report →
+              </button>
             </div>
           )}
 
@@ -529,13 +706,20 @@ Please begin your follow-up questions.`;
                 justifyContent:"center",fontSize:"28px"}}>📋</div>
               <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:"24px",
                 fontWeight:"400",color:"#3d5940",margin:"0 0 10px"}}>
-                Your Assessment Is Ready
+                Almost There
               </h2>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13.5px",color:"#6a7a65",
                 lineHeight:"1.8",margin:"0 0 28px",fontWeight:"300"}}>
-                Enter your email to reveal your Barrier Health Score and full personalized report. A copy will also be sent to your inbox.
+                Enter your details to unlock your full Barrier Health Report and join The Script — Ritual Script's monthly education newsletter.
               </p>
               <div style={{maxWidth:"360px",margin:"0 auto"}}>
+                <input type="text" placeholder="First name"
+                  value={firstName} onChange={e=>setFirstName(e.target.value)}
+                  style={{width:"100%",padding:"14px 18px",borderRadius:"12px",
+                    border:"1.5px solid rgba(145,175,145,.35)",
+                    fontFamily:"'Jost',sans-serif",fontSize:"14px",
+                    color:"#3d4a3a",fontWeight:"300",background:"white",
+                    marginBottom:"10px",boxSizing:"border-box",transition:"all .2s ease"}}/>
                 <input type="email" placeholder="your@email.com"
                   value={email} onChange={e=>setEmail(e.target.value)}
                   onKeyDown={e=>e.key==="Enter"&&submitEmail()}
@@ -551,54 +735,95 @@ Please begin your follow-up questions.`;
                   </p>
                 )}
                 <button className="pbtn" onClick={submitEmail}
-                  disabled={submittingEmail||!email.trim()}
+                  disabled={submitting}
                   style={{width:"100%",background:"#4a6e4e",color:"#f5f0e8",
                     border:"none",padding:"15px",borderRadius:"50px",
                     fontFamily:"'Jost',sans-serif",fontSize:"11px",
                     letterSpacing:"2.5px",textTransform:"uppercase",
-                    cursor:submittingEmail||!email.trim()?"default":"pointer",
+                    cursor:submitting?"default":"pointer",
                     transition:"all .25s ease",fontWeight:"500"}}>
-                  {submittingEmail?"Preparing your report...":"Reveal My Barrier Health Report →"}
+                  Reveal My Barrier Health Report →
                 </button>
               </div>
               <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",
                 color:"#b0bfa8",marginTop:"14px",letterSpacing:".3px"}}>
-                No spam. Unsubscribe anytime. By submitting you agree to receive skincare guidance from Ritual Script.
+                No spam. Unsubscribe anytime. By submitting you agree to receive The Script and occasional skincare guidance from Ritual Script.
               </p>
             </div>
           )}
 
-          {/* REPORT */}
-          {phase==="report"&&assessment&&(()=>{
-            const ss=SCORE_STYLES[assessment.score]||SCORE_STYLES["Stressed"];
+          {/* GENERATING */}
+          {phase==="generating"&&(
+            <div className="fade-in" style={{textAlign:"center",padding:"40px 0"}}>
+              <div style={{display:"flex",justifyContent:"center",marginBottom:"18px"}}>
+                <TypingIndicator/>
+              </div>
+              <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",color:"#6a7a65",
+                fontWeight:"300"}}>Writing your personalized report...</p>
+            </div>
+          )}
+
+          {/* FULL REPORT */}
+          {phase==="report" && result &&(()=>{
+            const t = result.tier;
+            const hasFreeText = freeText.freetext_reactivity || freeText.freetext_final;
             return(
               <div className="fade-up">
                 {/* Score badge */}
-                <div style={{background:ss.bg,border:`1.5px solid ${ss.color}28`,
-                  borderRadius:"16px",padding:"20px 24px",marginBottom:"28px",
+                <div style={{background:t.bg,border:`1.5px solid ${t.color}28`,
+                  borderRadius:"16px",padding:"20px 24px",marginBottom:"24px",
                   display:"flex",alignItems:"center",gap:"16px"}}>
                   <div style={{width:"54px",height:"54px",borderRadius:"50%",
-                    background:`${ss.color}16`,display:"flex",alignItems:"center",
+                    background:`${t.color}16`,display:"flex",alignItems:"center",
                     justifyContent:"center",fontSize:"24px",flexShrink:0}}>
-                    {ss.icon}
+                    {t.icon}
                   </div>
                   <div>
                     <div style={{fontFamily:"'Jost',sans-serif",fontSize:"9px",
                       letterSpacing:"2.5px",textTransform:"uppercase",
-                      color:ss.color,opacity:.75,marginBottom:"4px"}}>
+                      color:t.color,opacity:.75,marginBottom:"4px"}}>
                       Your Barrier Health Score
                     </div>
                     <div style={{fontFamily:"'Cormorant Garamond',serif",
-                      fontSize:"28px",fontWeight:"400",color:ss.color,lineHeight:1}}>
-                      {assessment.score}
+                      fontSize:"28px",fontWeight:"500",color:t.color,lineHeight:1}}>
+                      {result.score} — {t.label}
                     </div>
                   </div>
                 </div>
 
+                {/* In Their Own Words */}
+                {hasFreeText && (
+                  <div style={{background:"white",border:"1px solid rgba(145,175,145,.25)",
+                    borderRadius:"12px",padding:"18px 20px",marginBottom:"22px"}}>
+                    <div style={{fontFamily:"'Jost',sans-serif",fontSize:"9.5px",
+                      letterSpacing:"2.5px",textTransform:"uppercase",
+                      color:"#A0505E",marginBottom:"10px",fontWeight:"600"}}>
+                      In Their Own Words
+                    </div>
+                    {freeText.freetext_reactivity && (
+                      <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",fontStyle:"italic",
+                        color:"#3d4a3a",lineHeight:"1.7",margin:"0 0 10px"}}>"{freeText.freetext_reactivity}"</p>
+                    )}
+                    {freeText.freetext_final && (
+                      <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13px",fontStyle:"italic",
+                        color:"#3d4a3a",lineHeight:"1.7",margin:0}}>"{freeText.freetext_final}"</p>
+                    )}
+                  </div>
+                )}
+
                 {/* Report content */}
                 <div style={{maxHeight:"380px",overflowY:"auto",
                   paddingRight:"8px",marginBottom:"24px"}}>
-                  {formatReport(assessment.content)}
+                  {formatReport(reportText)}
+                  <div style={{marginTop:"18px",paddingTop:"14px",borderTop:"1px solid rgba(165,190,165,.25)"}}>
+                    <div style={{fontFamily:"'Jost',sans-serif",fontSize:"9.5px",
+                      letterSpacing:"2.5px",textTransform:"uppercase",
+                      color:"#6a8f6e",marginBottom:"6px",fontWeight:"600"}}>Suggested Retake</div>
+                    <p style={{fontFamily:"'Jost',sans-serif",fontSize:"13.5px",
+                      color:"#3d4a3a",lineHeight:"1.8",margin:0,fontWeight:"300"}}>
+                      Based on your current Barrier Health Score, consider retaking this assessment {result.tier.retake} to see how your barrier is responding.
+                    </p>
+                  </div>
                   <div ref={bottomRef}/>
                 </div>
 
@@ -613,7 +838,7 @@ Please begin your follow-up questions.`;
                       fontWeight:"500",transition:"all .2s ease"}}>
                     Explore Ritual Script →
                   </a>
-                  <a href={`mailto:${CONTACT_EMAIL}?subject=Barrier Health Assessment Follow-Up&body=Hi Rachel,%0D%0A%0D%0AI just completed the Barrier Health Assessment. My score was: ${assessment.score}.%0D%0A%0D%0AI have a question about my results.`}
+                  <a href={`mailto:${CONTACT_EMAIL}?subject=Barrier Health Assessment Follow-Up&body=Hi Rachel,%0D%0A%0D%0AI just completed the Barrier Health Assessment. My score was: ${result.score} (${t.label}).%0D%0A%0D%0AI have a question about my results.`}
                     style={{flex:1,minWidth:"160px",background:"white",
                       color:"#4a6e4e",padding:"13px 20px",borderRadius:"50px",
                       fontFamily:"'Jost',sans-serif",fontSize:"10px",
@@ -627,7 +852,7 @@ Please begin your follow-up questions.`;
 
                 <p style={{fontFamily:"'Jost',sans-serif",fontSize:"10px",
                   color:"#b0bfa8",letterSpacing:".3px",lineHeight:1.6,textAlign:"center"}}>
-                  A copy of this report has been sent to {userEmail} &nbsp;·&nbsp;
+                  A copy of this report has been sent to {email} &nbsp;·&nbsp;
                   This assessment is educational in nature and does not constitute medical advice.
                 </p>
               </div>
